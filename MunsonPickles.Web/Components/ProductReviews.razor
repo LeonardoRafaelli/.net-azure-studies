@@ -1,0 +1,55 @@
+@inject ReviewService reviewService
+@inject IJSRuntime JS
+
+<h1 class="display-6">Reviews</h1>
+
+@if (Product is null || Reviews is null)
+{
+    <p>We're still waiting for some reviews...</p>
+}
+else
+{
+    <div class="pt-3">  
+        <QuickGrid Items="@Reviews">
+            <TemplateColumn Title="Text" Sortable="false">
+                <button class="btn btn-link" @onclick="() => ShowReviewDetails(context)">@context.Text</button>
+            </TemplateColumn>
+        </QuickGrid>
+    </div>
+    <div>
+        <button class="btn btn-link" @onclick="@GetReviews">(refesh the reviews)</button>
+    </div>
+}
+
+@if (selectedReview is not null)
+{
+    <ReviewDetails Review="selectedReview" />
+}
+
+@code {
+    [Parameter]
+    public Product? Product { get; set; }
+
+    public IQueryable<Review>? Reviews;
+
+    private Review? selectedReview;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Product is null)
+            return;
+
+        await GetReviews();
+    }
+
+    async Task GetReviews()
+    {
+        Reviews = (await reviewService.GetReviewsForProduct(Product.Id)).AsQueryable();
+    }
+
+    async Task ShowReviewDetails(Review review)
+    {
+        selectedReview = review;
+        await JS.InvokeVoidAsync("showModal", "reviewDetailsModal");
+    }
+}
