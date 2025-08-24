@@ -15,40 +15,61 @@ public class ReviewService
 		pickleContext = context;
 	}
 
-	public async Task AddReview(string reviewText, int productId)
+	public async Task AddReview(string reviewText, List<string> photoUrls, int productId)
 	{
-        string userId = "matt"; // this will get changed out when we add auth
+		string userId = "matt"; // this will get changed out when we add auth
 
-        try
+		try
 		{
-            // create the new review
-            Review review = new()
-            {
-                Date = DateTime.Now,                
-                Text = reviewText,
-                UserId = userId
-            };
+			// create all the photo url object
+			List<ReviewPhoto> photos = new List<ReviewPhoto>();
+			
+			foreach (var photoUrl in photoUrls)
+			{
+				photos.Add(new ReviewPhoto {  PhotoUrl = photoUrl });
+			}
 
-            Product product = await pickleContext.Products.FindAsync(productId);
+			// create the new review
+			Review review = new()
+			{
+				Date = DateTime.Now,
+				Photos = photos,
+				Text = reviewText,
+				UserId = userId
+			};
 
-            if (product is null)
-                return;
+			Product product = await pickleContext
+				.Products
+				.Include(p => p.Reviews)
+				.FirstAsync(p => p.Id == productId);
 
-            if (product.Reviews is null)
-                product.Reviews = new List<Review>();
+			if (product is null)
+				return;
 
-            product.Reviews.Add(review);
+			if (product.Reviews is null)
+				product.Reviews = new List<Review>();
 
-            await pickleContext.SaveChangesAsync();
-        }
+			product.Reviews.Add(review);
+
+			await pickleContext.SaveChangesAsync();
+		}
 		catch (Exception ex)
 		{
 			System.Diagnostics.Debug.WriteLine(ex);
-		}		
+		}
 	}
 
 	public async Task<IEnumerable<Review>> GetReviewsForProduct(int productId)
 	{
 		return await pickleContext.Reviews.AsNoTracking().Where(r => r.Product.Id == productId).ToListAsync();
+	}
+
+	public async Task<Review?> GetReviewById(int reviewId)
+	{
+		return await pickleContext.Reviews
+			.Include(r => r.Product)
+			.Include(r => r.Photos)
+			.AsNoTracking()
+			.FirstOrDefaultAsync(r => r.Id == reviewId);
 	}
 }

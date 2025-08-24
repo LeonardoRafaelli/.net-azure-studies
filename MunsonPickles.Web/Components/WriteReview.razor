@@ -1,11 +1,11 @@
-﻿@using Azure.Storage.Blobs;
+﻿@using Azure.Storage.Blobs
 @using Azure.Storage.Blobs.Models
-@using System.Diagnostics.CodeAnalysis
+@using System.Diagnostics.CodeAnalysis;
 
 @inject IJSRuntime JS
 @inject ReviewService reviewService
-
-@inject BlobServiceClient BlobService
+@inject BlobServiceClient blobService
+@inject IConfiguration configuration
 
 <div class="modal fade" id="reviewModal" tabindex="-1" role="dialog" aria-hidden="true" aria-modal="true">
     <div class="modal-dialog modal-lg" role="document">
@@ -22,7 +22,7 @@
                     @bind="reviewText"/>
                 @if (showUpload)
                 {
-                    <InputFile id="hi" OnChange="@LoadFiles"></InputFile>
+                    <InputFile id="hi" OnChange="@LoadFiles" />
                 }
                 @if (uploadSuccessful)
                 {
@@ -39,41 +39,66 @@
 
 
 @code {
-    [Parameter]
-    public Product Product { get; set; } = new();
+    [Parameter]    
+    public Product Product { get; set; }
 
     string reviewText = string.Empty;
     string newBlobName = string.Empty;
-    string loggedInUser = "leo";
+    string loggedInUser = "matt"; // the name matt will eventually be replaced by the logged in user
     bool loadedPhoto = false;
 
     bool showUpload = true;
     bool uploadSuccessful = false;
-    
-    async Task LoadFiles(InputFileChangeEventArgs e)
+    readonly string photosPath = "https://stmunsonwesteuropedev001.blob.core.windows.net";
+
+    private async Task LoadFiles(InputFileChangeEventArgs e)
     {
         uploadSuccessful = false;
 
-        var containerClient = BlobService.GetBlobContainerClient(loggedInUser);
-        
+        // immediately save to blob storage
+
+        var containerClient = blobService.GetBlobContainerClient(loggedInUser);
+
         await containerClient.CreateIfNotExistsAsync(PublicAccessType.Blob);
 
         newBlobName = $"{Guid.NewGuid().ToString()}.jpg";
 
-        await containerClient.UploadBlobAsync(newBlobName, e.File.OpenReadStream(maxAllowedSize: 204800));
+        // just assuming everything is a jpg :)
+        await containerClient.UploadBlobAsync(
+            newBlobName, e.File.OpenReadStream(maxAllowedSize: 2048000)
+        );
 
         loadedPhoto = true;
+
+        // this is a way for me to know the upload worked
         uploadSuccessful = true;
-        StateHasChanged();
+        StateHasChanged();        
     }
     
     async Task SaveReview()
     {
-        await reviewService.AddReview(reviewText, Product.Id);
+        List<string>? photoUrls = new();
+        
+        
+        if (loadedPhoto)
+        {
+            photoUrls.Add($"{photosPath}/{loggedInUser}/{newBlobName}");            
+        }
+
+        await reviewService.AddReview(reviewText, photoUrls, Product.Id);
 
         // we'll just assume everything worked out great and close the modal
 
         reviewText = string.Empty;
+        newBlobName = string.Empty;
+        loadedPhoto = false;
+        showUpload = false;
+        uploadSuccessful = false;
+
+        // hacky work around to get the upload to clear file name
+        StateHasChanged();
+        showUpload = true;
+        StateHasChanged();
 
         await JS.InvokeVoidAsync("hideModal", "reviewModal");
     }
